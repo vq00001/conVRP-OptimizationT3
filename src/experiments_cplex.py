@@ -159,7 +159,7 @@ def _run_tuning(model, instance, ctx, baseline, best_manual):
 
     start = perf_counter()
     tune_status = c.parameters.tune_problem(
-        [(c.parameters.threads.get_id(), THREADS)]  # fijo: no tunear threads
+        [(c.parameters.threads, THREADS)]  # fijo: no tunear threads
     )
     tuning_wall = perf_counter() - start
     changed = {str(k): v for k, v in c.parameters.get_changed()}

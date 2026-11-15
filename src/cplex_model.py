@@ -237,7 +237,8 @@ def _apply_params(model, params):
 
 
 # FUNCIÓN PRINCIPAL
-def build_cplex_model(instance, params=None, relax=False):
+def build_model(instance, params=None, relax=False):
+    """Construye el PLEM de ruteo consistente en CPLEX (docplex)."""
     params = params or {}
 
     model = Model(name=str(instance["name"]))
@@ -273,3 +274,6 @@ def build_cplex_model(instance, params=None, relax=False):
         }
     )
     return model, variables
+
+
+build_cplex_model = build_model
