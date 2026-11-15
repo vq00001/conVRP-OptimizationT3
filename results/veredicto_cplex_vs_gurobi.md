@@ -14,7 +14,7 @@ Análisis de la corrida experimental de **CPLEX 22.2.0.0** (`run_id`: `20261115_
 
 Los resultados son **plenamente válidos y consistentes** entre ambos solvers:
 
-1. **Equivalencia matemática verificada**: CPLEX y Gurobi alcanzan exactamente los mismos óptimos enteros (`511.19` en C101 y `893.66` en RC101), las mismas cotas de relajación lineal (`129.87` y `156.66`), las mismas brechas de integralidad (`74.59 %` y `82.47 %`) y los mismos valores de holgura, precio sombra y rangos RHS en sensibilidad de capacidad.
+1. **Equivalencia matemática verificada**: CPLEX y Gurobi alcanzan exactamente los mismos óptimos enteros (`511.19` en C101 y `893.66` en RC101), las mismas cotas de relajación lineal (`129.87` y `156.66`), las mismas brechas de integralidad (`74.59 %` y `82.47 %`) y el mismo patrón de holguras, precios sombra (`0.0`) y rangos RHS en sensibilidad de capacidad (salvo permutación simétrica de vehículos 2 y 3 en RC101).
 2. **Desempeño por instancia**:
    - En **`instance_1_c101_15c`**, Gurobi fue considerablemente más rápido en `base` (`7.67 s` / `10.49 s` vs. `76.64 s` en CPLEX). Sin embargo, el **tuning de CPLEX** y **`mipfocus_1`** recortaron el tiempo de CPLEX a **`19.79 s`** y **`22.56 s`**, respectivamente (~3.4x–3.9x más rápido que el `base` de CPLEX).
    - En **`instance_2_rc101_15c`**, ambos solvers resolvieron en menos de un segundo en `base`, con CPLEX ligeramente más rápido (`0.42 s` vs. `0.57 s` / `0.59 s` en Gurobi) y un tuning casi instantáneo (`2.45 s`).
@@ -79,8 +79,8 @@ La **brecha de integralidad alta** (`74.59 %` y `82.47 %`) es característica de
 
 Todas las combinaciones `(ruta, día)` (9 por instancia) terminaron en estado `OPTIMAL_LP_FIXED` con `fixed_lp_objective` igual al óptimo entero (`511.19` en C101 y `893.66` en RC101) y **`shadow_price_pi = 0.0`** en ambos solvers:
 
-- **C101 (`Q = 85.0`)**: 8 pares tienen holgura positiva (`5.0` a `35.0`) y 1 par está saturado (`route=2, day=2`, `slack = 0.0`, `SARHSLow = 85.0`, `SARHSUp = 1e+20` / `inf`).
-- **RC101 (`Q = 90.0`)**: 7 pares tienen holgura positiva (`5.0` a `30.0`) y 2 pares están saturados (`route=1, day=2` y `route=3, day=1`, ambos con `slack = 0.0`, `SARHSLow = 90.0`, `SARHSUp = 1e+20` / `inf`).
+- **C101 (`Q = 85.0`)**: coincidencia exacta par por par entre ambos solvers: 8 pares con holgura positiva (`5.0` a `35.0`) y 1 par saturado (`route=2, day=2`, `slack = 0.0`, `SARHSLow = 85.0`, `SARHSUp = 1e+20` / `inf`).
+- **RC101 (`Q = 90.0`)**: ambos solvers tienen 7 pares con holgura positiva (`5.0` a `30.0`) y 2 pares saturados (`slack = 0.0`, `SARHSLow = 90.0`, `SARHSUp = 1e+20` / `inf`): `route=1, day=2` en ambos, y el segundo corresponde a `route=3, day=1` en CPLEX vs. `route=2, day=1` en Gurobi (permutación simétrica de las rutas homogéneas 2 y 3 con idéntico conjunto de holguras).
 
 **Interpretación**: Que `Pi = 0.0` incluso en las restricciones activas (`slack = 0.0`) se debe a que el análisis se realiza sobre el **LP con `X` y `Z` fijados** al incumbente óptimo. Una vez fija la asignación de clientes a rutas, la carga diaria es constante y la distancia total no cambia marginalmente al aumentar o disminuir localmente `Q` mientras no se viole la carga ya asignada (`SARHSLow`). Esto no implica que la capacidad no restrinja el problema MILP original si `Q` disminuyera por debajo de `SARHSLow` y obligara a reasignar clientes.
 
