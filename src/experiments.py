@@ -21,6 +21,7 @@ INSTANCE_DIR = REPO_ROOT / "data"
 RESULTS_DIR = REPO_ROOT / "results"
 RESULTS_FILE = RESULTS_DIR / "results.csv"
 SENSITIVITY_FILE = RESULTS_DIR / "sensitivity.csv"
+LOG_DIR = RESULTS_DIR / "logs" / "gurobi"
 
 INSTANCE_FILES = ("instance_1_c101_15c.json", "instance_2_rc101_15c.json")
 TUNE_TIME_LIMIT = 120
@@ -57,15 +58,36 @@ def _solution_metrics(model, instance_name, experiment, relax=False):
         "best_bound": model.ObjBound,
         "gap_pct": gap_pct,
         "runtime_seconds": model.Runtime,
+        "nodes": int(round(model.NodeCount)) if model.IsMIP else 0,
         "solutions_found": model.SolCount,
         "threads": model.Params.Threads,
         "time_limit_seconds": model.Params.TimeLimit,
     }
 
 
-def _run_tuning(instance, build_model_fn, baseline_result, best_manual):
+def _prepare_log_params(log_dir, instance_name, experiment, base_params=None):
+    """Agrega parámetros de archivo log nativo sin imprimir en consola."""
+    params = dict(base_params or {})
+    if log_dir is None:
+        params.setdefault("OutputFlag", 0)
+        return params
+    log_path = Path(log_dir) / f"{instance_name}_{experiment}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.unlink(missing_ok=True)
+    params.update(
+        {
+            "OutputFlag": 1,
+            "LogToConsole": 0,
+            "LogFile": str(log_path),
+        }
+    )
+    return params
+
+
+def _run_tuning(instance, build_model_fn, baseline_result, best_manual, log_dir=None):
     """Ejecuta el tuner y vuelve a resolver con su mejor configuración."""
-    model, _ = build_model_fn(instance, params={}, relax=False)
+    params = _prepare_log_params(log_dir, instance["name"], "tuned")
+    model, _ = build_model_fn(instance, params=params, relax=False)
     model.Params.Threads = 1
     model.Params.TimeLimit = 600
     model.Params.TuneTimeLimit = TUNE_TIME_LIMIT
@@ -84,8 +106,11 @@ def _run_tuning(instance, build_model_fn, baseline_result, best_manual):
             "best_bound": None,
             "gap_pct": None,
             "runtime_seconds": None,
+            "nodes": None,
             "tuning_wall_seconds": tuning_wall_seconds,
         }
+        if model.Params.LogFile:
+            model.Params.LogFile = ""
         model.dispose()
         return row
 
@@ -95,6 +120,8 @@ def _run_tuning(instance, build_model_fn, baseline_result, best_manual):
     model.Params.TimeLimit = 600
     model.optimize()
     row = _solution_metrics(model, instance["name"], "tuned")
+    if model.Params.LogFile:
+        model.Params.LogFile = ""
     row["tuning_wall_seconds"] = tuning_wall_seconds
     row["tune_time_limit_seconds"] = TUNE_TIME_LIMIT
     row["baseline_objective"] = baseline_result["objective"]
@@ -133,7 +160,7 @@ def _run_tuning(instance, build_model_fn, baseline_result, best_manual):
     return row
 
 
-def sensitivity_capacity(model, instance):
+def sensitivity_capacity(model, instance, log_dir=None):
     """Fija enteras y extrae Pi, holgura y rangos RHS de capacidad."""
     if model.SolCount == 0:
         return [
@@ -147,6 +174,13 @@ def sensitivity_capacity(model, instance):
     fixed_model = model.fixed()
     fixed_model.Params.Threads = 1
     fixed_model.Params.TimeLimit = 600
+    if log_dir is not None:
+        log_path = Path(log_dir) / f"{instance['name']}_sensitivity_capacity.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.unlink(missing_ok=True)
+        fixed_model.Params.OutputFlag = 1
+        fixed_model.Params.LogToConsole = 0
+        fixed_model.Params.LogFile = str(log_path)
     fixed_model.optimize()
 
     if fixed_model.Status != GRB.OPTIMAL:
@@ -155,6 +189,8 @@ def sensitivity_capacity(model, instance):
             "experiment": "sensitivity_capacity",
             "status": STATUS_NAMES.get(fixed_model.Status, str(fixed_model.Status)),
         }
+        if fixed_model.Params.LogFile:
+            fixed_model.Params.LogFile = ""
         fixed_model.dispose()
         return [row]
 
@@ -182,6 +218,8 @@ def sensitivity_capacity(model, instance):
                     "time_limit_seconds": fixed_model.Params.TimeLimit,
                 }
             )
+    if fixed_model.Params.LogFile:
+        fixed_model.Params.LogFile = ""
     fixed_model.dispose()
     return records
 
@@ -216,7 +254,12 @@ def run_experiments(instance, build_model_fn=build_model, run_model_fn=run_model
 
 
 def run_experiments_with_size_check(
-    instance, build_model_fn, run_model_fn, allow_large=False
+    instance,
+    build_model_fn,
+    run_model_fn,
+    allow_large=False,
+    log_dir=None,
+    skip_tuning=False,
 ):
     """Preflight size before starting a suite that would fail on a restricted license."""
     sizing_model, _ = build_model_fn(instance, params={"OutputFlag": 0}, relax=False)
@@ -242,8 +285,11 @@ def run_experiments_with_size_check(
 
     # Baseline y comparaciones manuales: cada corrida cambia solo el flag nombrado.
     for experiment_name, params in CONFIGURATIONS.items():
+        run_params = _prepare_log_params(
+            log_dir, instance["name"], experiment_name, params
+        )
         result, model, _ = run_model_fn(
-            instance=instance, build_model=build_model_fn, params=params, relax=False
+            instance=instance, build_model=build_model_fn, params=run_params, relax=False
         )
         result["experiment"] = experiment_name
         results.append(result)
@@ -264,29 +310,44 @@ def run_experiments_with_size_check(
         default=None,
     )
 
-    lp_result, lp_model, _ = run_model_fn(
-        instance=instance,
-        build_model=build_model_fn,
-        params={"OutputFlag": 0},
-        relax=True,
-    )
-    lp_result["experiment"] = "relajado"
+    # Relajación continua vía model.relax() sobre el modelo entero.
+    mip_for_relax, _ = build_model_fn(instance, params={"OutputFlag": 0}, relax=False)
+    lp_model = mip_for_relax.relax()
+    lp_model.Params.Threads = 1
+    lp_model.Params.TimeLimit = 600
+    if log_dir is not None:
+        lp_log = Path(log_dir) / f"{instance['name']}_relajado.log"
+        lp_log.parent.mkdir(parents=True, exist_ok=True)
+        lp_log.unlink(missing_ok=True)
+        lp_model.Params.OutputFlag = 1
+        lp_model.Params.LogToConsole = 0
+        lp_model.Params.LogFile = str(lp_log)
+    else:
+        lp_model.Params.OutputFlag = 0
+    lp_model.optimize()
+    lp_result = _solution_metrics(lp_model, instance["name"], "relajado", relax=True)
+    if lp_model.Params.LogFile:
+        lp_model.Params.LogFile = ""
     results.append(lp_result)
     lp_model.dispose()
+    mip_for_relax.dispose()
     calculate_gap(results)
 
-    results.append(_run_tuning(instance, build_model_fn, baseline, best_manual))
-    sensitivity_rows = sensitivity_capacity(baseline_model, instance)
+    if not skip_tuning:
+        results.append(
+            _run_tuning(instance, build_model_fn, baseline, best_manual, log_dir=log_dir)
+        )
+    sensitivity_rows = sensitivity_capacity(baseline_model, instance, log_dir=log_dir)
     results.extend(sensitivity_rows)
     baseline_model.dispose()
     return results
 
 
-def save_to_csv(results, filename=RESULTS_FILE):
+def save_to_csv(results, filename=RESULTS_FILE, overwrite=False):
     filename = Path(filename)
     filename.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(results)
-    if filename.exists() and filename.stat().st_size:
+    if not overwrite and filename.exists() and filename.stat().st_size:
         # Mantiene un CSV válido cuando nuevas métricas agregan columnas.
         previous = pd.read_csv(filename)
         df = pd.concat([previous, df], ignore_index=True, sort=False)
@@ -308,6 +369,22 @@ if __name__ == "__main__":
         help="Archivo CSV para filas de sensibilidad de capacidad.",
     )
     parser.add_argument(
+        "--log-dir",
+        type=str,
+        default=str(LOG_DIR),
+        help="Carpeta donde guardar archivos .log nativos de Gurobi.",
+    )
+    parser.add_argument(
+        "--skip-tuning",
+        action="store_true",
+        help="Omitir el ajuste automático (tuning).",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Sobrescribir los CSV de salida en vez de anexar filas.",
+    )
+    parser.add_argument(
         "--allow-large",
         action="store_true",
         help="Omitir la prevalidación de tamaño (requiere licencia adecuada).",
@@ -324,13 +401,22 @@ if __name__ == "__main__":
             "Faltan instancias requeridas: " + ", ".join(map(str, missing))
         )
 
+    if args.overwrite:
+        Path(args.filename).unlink(missing_ok=True)
+        Path(args.sensitivity_file).unlink(missing_ok=True)
+
     for path in paths:
         if args.verbose:
             print(f"\nProcesando instancia: {path.name}")
 
         instance = load_instance(path)
         rows = run_experiments_with_size_check(
-            instance, build_model, run_model, allow_large=args.allow_large
+            instance,
+            build_model,
+            run_model,
+            allow_large=args.allow_large,
+            log_dir=args.log_dir,
+            skip_tuning=args.skip_tuning,
         )
         save_to_csv(rows, args.filename)
         sensitivity_rows = [
@@ -343,7 +429,8 @@ if __name__ == "__main__":
             for row in rows:
                 print(
                     f"{row.get('experiment')}: status={row.get('status')}, "
-                    f"objective={row.get('objective')}, runtime={row.get('runtime_seconds')}"
+                    f"objective={row.get('objective')}, nodes={row.get('nodes')}, "
+                    f"runtime={row.get('runtime_seconds')}"
                 )
 
     print(f"\nResultados guardados en: {Path(args.filename).resolve()}")

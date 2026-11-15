@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Solver execution logs required as T3 deliverables
+!results/logs/**/*.log
+!results/cplex/**/logs/*.log

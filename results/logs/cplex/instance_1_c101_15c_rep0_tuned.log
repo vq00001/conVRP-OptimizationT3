@@ -1,0 +1,272 @@
+
+Tuning on problem '/tmp/tmpbl7q6qad/model.lp'
+Test 'defaults':
+   Integer optimal, tolerance.
+   Time = 37.22 sec. (60414.32 ticks)  Objective = 511.19   Best bound = 511.163 
+
+Tuning progress: 13%
+
+Test 'short1':
+   Time limit exceeded.
+   Time = 3.72 sec. (6362.63 ticks)  Objective = 519.29   Best bound = 367.704 
+
+Tuning progress: 14%
+
+Test 'short_test2':
+   Time limit exceeded.
+   Time = 3.73 sec. (6275.24 ticks)  Objective = 516.33   Best bound = 345.338 
+
+Tuning progress: 16%
+
+Test 'short_test3':
+   Time limit exceeded.
+   Time = 3.72 sec. (6517.63 ticks)  Objective = 519.29   Best bound = 366.443 
+
+Tuning progress: 17%
+
+Test 'short_test4':
+   Time limit exceeded.
+   Time = 3.72 sec. (6364.07 ticks)  Objective = 526.36   Best bound = 365.119 
+
+Tuning progress: 18%
+
+Test 'short_test5':
+Advanced basis not built.
+   Time limit exceeded.
+   Time = 3.72 sec. (6299.82 ticks)  Objective = 514.29   Best bound = 347.863 
+
+Tuning progress: 20%
+
+Test 'short_test6':
+   Time limit exceeded.
+   Time = 3.72 sec. (6379.60 ticks)  Objective = 514.29   Best bound = 330.933 
+
+Tuning progress: 21%
+
+Test 'short_test7':
+   Time limit exceeded.
+   Time = 3.72 sec. (6429.66 ticks)  Objective = 519.29   Best bound = 368.452 
+
+Tuning progress: 23%
+
+Test 'short_test8':
+   Time limit exceeded.
+   Time = 3.72 sec. (6488.13 ticks)  Objective = 623.35   Best bound = 377.737 
+
+Tuning progress: 24%
+
+Test 'short_test9':
+   Time limit exceeded.
+   Time = 3.72 sec. (6794.99 ticks)  Objective = 545.18   Best bound = 332.36 
+
+Tuning progress: 26%
+
+Test 'short_test10':
+   Time limit exceeded.
+   Time = 3.72 sec. (5950.63 ticks)  Objective = 519.3   Best bound = 393.011 
+
+Tuning progress: 27%
+
+Test 'short_test11':
+   Time limit exceeded.
+   Time = 3.72 sec. (6813.26 ticks)  Objective = 535.65   Best bound = 333.617 
+
+Tuning progress: 28%
+
+Test 'short_test12':
+   Time limit exceeded.
+   Time = 3.72 sec. (6578.22 ticks)  Objective = 541.96   Best bound = 366.061 
+
+Tuning progress: 30%
+
+Test 'short_test13':
+   Time limit exceeded.
+   Time = 3.72 sec. (6018.95 ticks)  Objective = 520.53   Best bound = 356.239 
+
+Tuning progress: 31%
+
+Test 'short_test14':
+   Time limit exceeded.
+   Time = 3.72 sec. (5848.10 ticks)  Objective = 520.53   Best bound = 356.239 
+
+Tuning progress: 38%
+
+Test 'short_test15':
+   Time limit exceeded.
+   Time = 3.72 sec. (6231.23 ticks)  Objective = 570.14   Best bound = 351.391 
+
+Tuning progress: 40%
+
+Test 'short_test16':
+   Time limit exceeded.
+   Time = 3.72 sec. (6338.57 ticks)  Objective = 512.53   Best bound = 391.747 
+
+Tuning progress: 41%
+
+Test 'short_test17':
+   Time limit exceeded.
+   Time = 3.72 sec. (5679.94 ticks)  Objective = 522.45   Best bound = 394.011 
+
+Tuning progress: 43%
+
+Test 'short_test18':
+   Time limit exceeded.
+   Time = 3.72 sec. (5623.37 ticks)  Objective = 517.24   Best bound = 382.304 
+
+Tuning progress: 45%
+
+Test 'short_test19':
+   Time limit exceeded.
+   Time = 3.72 sec. (5574.93 ticks)  Objective = 517.41   Best bound = 400.935 
+
+Tuning progress: 46%
+
+Test 'short_test20':
+   Time limit exceeded.
+   Time = 3.72 sec. (5397.09 ticks)  Objective = 521.01   Best bound = 395.334 
+
+Tuning progress: 48%
+
+Test 'short_test21':
+   Time limit exceeded.
+   Time = 3.72 sec. (5262.64 ticks)  Objective = 515.99   Best bound = 382.336 
+
+Tuning progress: 50%
+
+Test 'short_test22':
+   Time limit exceeded.
+   Time = 3.72 sec. (5411.49 ticks)  Objective = 519.38   Best bound = 401.976 
+
+Tuning progress: 50%
+
+Test 'long_test1':
+   Integer optimal, tolerance.
+   Time = 22.11 sec. (30023.39 ticks)  Objective = 511.19   Best bound = 511.174 
+
+Tuning progress: 74%
+
+Test 'long_test2':
+   Integer optimal, tolerance.
+   Time = 19.79 sec. (27330.95 ticks)  Objective = 511.19   Best bound = 511.159 
+
+Tuning progress: 88%
+
+Test 'long_test3':
+   Integer optimal, tolerance.
+   Time = 21.50 sec. (30022.74 ticks)  Objective = 511.19   Best bound = 511.169 
+
+Default test: Time = 37.22 sec.
+Best test: 'long_test2'  Time = 19.79 sec.
+
+Version identifier: 22.2.0.0 | 2026-05-04 | 5dff98e58
+CPXPARAM_Read_DataCheck                          1
+CPXPARAM_Threads                                 1
+CPXPARAM_RandomSeed                              0
+CPXPARAM_MIP_Strategy_VariableSelect             4
+CPXPARAM_MIP_Strategy_Probe                      -1
+CPXPARAM_MIP_Limits_CutPasses                    1
+CPXPARAM_TimeLimit                               600
+CPXPARAM_Tune_TimeLimit                          120
+Tried aggregator 1 time.
+MIP Presolve eliminated 804 rows and 390 columns.
+MIP Presolve modified 1413 coefficients.
+Reduced MIP has 951 rows, 1125 columns, and 5241 nonzeros.
+Reduced MIP has 1089 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (3.33 ticks)
+Found incumbent of value 653.090000 after 0.01 sec. (10.17 ticks)
+Tried aggregator 1 time.
+Detecting symmetries...
+MIP Presolve modified 12 coefficients.
+Reduced MIP has 951 rows, 1125 columns, and 5241 nonzeros.
+Reduced MIP has 1089 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (4.01 ticks)
+Clique table members: 807.
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: none, using 1 thread.
+Root relaxation solution time = 0.01 sec. (17.05 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+*     0+    0                          653.0900        0.0000           100.00%
+      0     0      218.9200   153      653.0900      218.9200      465   66.48%
+*     0+    0                          620.3900      218.9200            64.71%
+      0     0      219.2219   162      620.3900     Cuts: 102      570   64.66%
+      0     2      219.2219   162      620.3900      219.2550      570   64.66%
+Elapsed time = 0.07 sec. (118.18 ticks, tree = 0.01 MB, solutions = 2)
+*    70+   41                          525.6500      278.9973            46.92%
+     94    62      315.3039   133      525.6500      281.1936     5844   46.51%
+*   170+  121                          524.3400      293.2794            44.07%
+    180   133      419.7806   112      524.3400      293.2794     9955   44.07%
+    273   209      418.5197    82      524.3400      310.4002    13794   40.80%
+    414   330      459.2480    95      524.3400      316.0521    17281   39.72%
+    559   436      476.5304    86      524.3400      325.4100    21196   37.94%
+*   670+  509                          523.8500      327.7400            37.44%
+    673   512      392.9024    72      523.8500      327.7400    24780   37.44%
+*   770+  581                          522.1300      332.2080            36.37%
+    815   617      465.0411   107      522.1300      336.0205    27938   35.64%
+    949   708      381.3999   106      522.1300      341.6404    31587   34.57%
+
+Performing restart 1
+
+Repeating presolve.
+Tried aggregator 1 time.
+MIP Presolve modified 1035 coefficients.
+Reduced MIP has 951 rows, 1125 columns, and 4422 nonzeros.
+Reduced MIP has 1089 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.01 sec. (5.52 ticks)
+Represolve time = 0.01 sec. (6.86 ticks)
+   1010     0      242.6676   159      522.1300      Cuts: 97    34601   34.01%
+   1010     2      242.6676   159      522.1300      344.5533    34601   34.01%
+   1513   354      412.1970    43      522.1300      362.3855    52064   30.59%
+Elapsed time = 2.06 sec. (3320.77 ticks, tree = 0.41 MB, solutions = 6)
+*  1700   474      integral     0      518.9700      372.6011    57681   28.20%
+   1981   641      405.3850   108      518.9700      386.2839    69036   25.57%
+*  2345   860      integral     0      517.8900      393.7595    77171   23.97%
+*  2445+  908                          517.4100      395.7474            23.51%
+   2582   992      471.9717   126      517.4100      397.6500    84529   23.15%
+   3028  1209      470.5533    81      517.4100      405.5338   101761   21.62%
+   3525  1449      456.3174    81      517.4100      414.9524   119449   19.80%
+   4100  1746      503.6876   112      517.4100      421.7621   135273   18.49%
+*  4452  1918      integral     0      515.9200      424.9868   143979   17.63%
+*  4552+ 1939                          513.4500      425.4498            17.14%
+   4653  1968      471.0423   101      513.4500      426.2214   150368   16.99%
+   5210  2159      484.1869    56      513.4500      432.4979   167361   15.77%
+   5655  2285      510.6398    87      513.4500      437.1575   183178   14.86%
+   6095  2357      471.1096    28      513.4500      442.0283   198207   13.91%
+   6588  2483      491.5080   114      513.4500      445.3198   212348   13.27%
+Elapsed time = 9.38 sec. (12868.06 ticks, tree = 2.69 MB, solutions = 11)
+   7136  2620        cutoff            513.4500      448.8758   227378   12.58%
+*  7328  2619      integral     0      511.1900      450.3745   234608   11.90%
+   7586  2625    infeasible            511.1900      451.7469   242680   11.63%
+   8077  2630      490.3263    26      511.1900      454.0491   258065   11.18%
+   8599  2581        cutoff            511.1900      456.5386   274050   10.69%
+   9102  2513      505.8433    21      511.1900      459.3668   290668   10.14%
+   9629  2442      484.0181    75      511.1900      462.2804   307168    9.57%
+  10102  2346      498.0250   116      511.1900      465.1285   323696    9.01%
+  10644  2275      506.9032   142      511.1900      468.2066   339703    8.41%
+  11210  2158      474.9124    27      511.1900      471.5869   354726    7.75%
+  11878  2058        cutoff            511.1900      475.0847   369456    7.06%
+Elapsed time = 16.52 sec. (22417.54 ticks, tree = 2.30 MB, solutions = 12)
+  12552  1855        cutoff            511.1900      478.0243   384361    6.49%
+  13240  1612        cutoff            511.1900      480.7155   398976    5.96%
+  13954  1267        cutoff            511.1900      483.7138   413730    5.37%
+  14715   819        cutoff            511.1900      487.7780   427981    4.58%
+  15629   164        cutoff            511.1900      502.1937   441135    1.76%
+
+Clique cuts applied:  27
+Cover cuts applied:  78
+Implied bound cuts applied:  123
+Flow cuts applied:  11
+Mixed integer rounding cuts applied:  50
+Zero-half cuts applied:  1
+Lift and project cuts applied:  1
+Gomory fractional cuts applied:  1
+
+Root node processing (before b&c):
+  Real time             =    0.07 sec. (118.30 ticks)
+Sequential b&c:
+  Real time             =   19.90 sec. (27212.99 ticks)
+                          ------------
+Total (root+branch&cut) =   19.97 sec. (27331.30 ticks)

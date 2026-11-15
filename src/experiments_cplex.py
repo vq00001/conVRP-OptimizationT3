@@ -27,6 +27,7 @@ import json
 import math
 import os
 import platform
+import shutil
 import socket
 import tempfile
 from datetime import datetime
@@ -103,10 +104,18 @@ def _prepare(model, seed, time_limit=TIME_LIMIT):
     model.parameters.randomseed = seed
 
 
-def _solve_and_measure(model, instance, experiment, ctx, relax=False):
+def _solve_and_measure(model, instance, experiment, ctx, relax=False, log_path=None):
     """Resuelve un modelo docplex y devuelve (fila_de_métricas, solución)."""
     start = perf_counter()
-    sol = model.solve()
+    if log_path is not None:
+        log_path = Path(log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "w", encoding="utf-8") as log_f:
+            model.context.solver.log_output = log_f
+            sol = model.solve(log_output=log_f)
+            model.context.solver.log_output = False
+    else:
+        sol = model.solve()
     wall = perf_counter() - start
     det = model.solve_details
 
@@ -146,85 +155,103 @@ def _solve_and_measure(model, instance, experiment, ctx, relax=False):
 
 
 # Tuning (API nativa de CPLEX)
-def _run_tuning(model, instance, ctx, baseline, best_manual):
+def _run_tuning(model, instance, ctx, baseline, best_manual, log_path=None):
     """Ejecuta tune_problem y re-resuelve con la mejor configuración."""
     c = cplex.Cplex(_export_lp(model))
-    for stream in (c.set_log_stream, c.set_results_stream, c.set_warning_stream):
-        stream(None)
+    log_f = None
+    if log_path is not None:
+        log_path = Path(log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_f = open(log_path, "w", encoding="utf-8")
+        for stream in (c.set_log_stream, c.set_results_stream, c.set_warning_stream):
+            stream(log_f)
+    else:
+        for stream in (c.set_log_stream, c.set_results_stream, c.set_warning_stream):
+            stream(None)
 
-    c.parameters.threads.set(THREADS)
-    c.parameters.randomseed.set(ctx["seed"])
-    c.parameters.timelimit.set(TIME_LIMIT)  # límite por corrida de prueba
-    c.parameters.tune.timelimit.set(TUNE_TIME_LIMIT)  # límite total del tuning
+    try:
+        c.parameters.threads.set(THREADS)
+        c.parameters.randomseed.set(ctx["seed"])
+        c.parameters.timelimit.set(TIME_LIMIT)  # límite por corrida de prueba
+        c.parameters.tune.timelimit.set(TUNE_TIME_LIMIT)  # límite total del tuning
 
-    start = perf_counter()
-    tune_status = c.parameters.tune_problem(
-        [(c.parameters.threads, THREADS)]  # fijo: no tunear threads
-    )
-    tuning_wall = perf_counter() - start
-    changed = {str(k): v for k, v in c.parameters.get_changed()}
-
-    # Blindar parámetros de comparación tras el tuning
-    c.parameters.threads.set(THREADS)
-    c.parameters.timelimit.set(TIME_LIMIT)
-    c.parameters.randomseed.set(ctx["seed"])
-
-    t0 = perf_counter()
-    c.solve()
-    wall = perf_counter() - t0
-
-    has_sol = c.solution.is_primal_feasible()
-    row = _base_row(instance, "tuned", ctx)
-    row.update(
-        {
-            "status": c.solution.get_status_string(),
-            "objective": c.solution.get_objective_value() if has_sol else None,
-            "best_bound": _clean(c.solution.MIP.get_best_objective()),
-            "gap_pct": 100 * c.solution.MIP.get_mip_relative_gap() if has_sol else None,
-            "runtime_seconds": wall,
-            "wall_seconds": wall,
-            "nodes": c.solution.progress.get_num_nodes_processed(),
-            "has_solution": has_sol,
-            "threads": THREADS,
-            "time_limit_seconds": TIME_LIMIT,
-            "tune_status": tune_status,
-            "tuning_wall_seconds": tuning_wall,
-            "tune_time_limit_seconds": TUNE_TIME_LIMIT,
-            "tuned_params": json.dumps(changed, default=str),
-            "baseline_objective": baseline["objective"],
-            "baseline_runtime_seconds": baseline["runtime_seconds"],
-            "baseline_gap_pct": baseline["gap_pct"],
-            "best_manual_experiment": best_manual["experiment"]
-            if best_manual
-            else None,
-            "best_manual_objective": best_manual["objective"] if best_manual else None,
-            "best_manual_runtime_seconds": best_manual["runtime_seconds"]
-            if best_manual
-            else None,
-            "best_manual_gap_pct": best_manual["gap_pct"] if best_manual else None,
-        }
-    )
-
-    def _delta(a, b):
-        return a - b if a is not None and b is not None else None
-
-    row["delta_vs_baseline"] = _delta(row["objective"], baseline["objective"])
-    row["runtime_delta_vs_baseline_seconds"] = _delta(
-        row["runtime_seconds"], baseline["runtime_seconds"]
-    )
-    if best_manual:
-        row["delta_vs_best_manual"] = _delta(row["objective"], best_manual["objective"])
-        row["runtime_delta_vs_best_manual_seconds"] = _delta(
-            row["runtime_seconds"], best_manual["runtime_seconds"]
+        start = perf_counter()
+        tune_status = c.parameters.tune_problem(
+            [(c.parameters.threads, THREADS)]  # fijo: no tunear threads
         )
-    c.end()
-    return row
+        tuning_wall = perf_counter() - start
+        changed = {str(k): v for k, v in c.parameters.get_changed()}
+
+        # Blindar parámetros de comparación tras el tuning
+        c.parameters.threads.set(THREADS)
+        c.parameters.timelimit.set(TIME_LIMIT)
+        c.parameters.randomseed.set(ctx["seed"])
+
+        t0 = perf_counter()
+        c.solve()
+        wall = perf_counter() - t0
+
+        has_sol = c.solution.is_primal_feasible()
+        row = _base_row(instance, "tuned", ctx)
+        row.update(
+            {
+                "status": c.solution.get_status_string(),
+                "objective": c.solution.get_objective_value() if has_sol else None,
+                "best_bound": _clean(c.solution.MIP.get_best_objective()),
+                "gap_pct": 100 * c.solution.MIP.get_mip_relative_gap()
+                if has_sol
+                else None,
+                "runtime_seconds": wall,
+                "wall_seconds": wall,
+                "nodes": c.solution.progress.get_num_nodes_processed(),
+                "has_solution": has_sol,
+                "threads": THREADS,
+                "time_limit_seconds": TIME_LIMIT,
+                "tune_status": tune_status,
+                "tuning_wall_seconds": tuning_wall,
+                "tune_time_limit_seconds": TUNE_TIME_LIMIT,
+                "tuned_params": json.dumps(changed, default=str),
+                "baseline_objective": baseline["objective"],
+                "baseline_runtime_seconds": baseline["runtime_seconds"],
+                "baseline_gap_pct": baseline["gap_pct"],
+                "best_manual_experiment": best_manual["experiment"]
+                if best_manual
+                else None,
+                "best_manual_objective": best_manual["objective"]
+                if best_manual
+                else None,
+                "best_manual_runtime_seconds": best_manual["runtime_seconds"]
+                if best_manual
+                else None,
+                "best_manual_gap_pct": best_manual["gap_pct"] if best_manual else None,
+            }
+        )
+
+        def _delta(a, b):
+            return a - b if a is not None and b is not None else None
+
+        row["delta_vs_baseline"] = _delta(row["objective"], baseline["objective"])
+        row["runtime_delta_vs_baseline_seconds"] = _delta(
+            row["runtime_seconds"], baseline["runtime_seconds"]
+        )
+        if best_manual:
+            row["delta_vs_best_manual"] = _delta(
+                row["objective"], best_manual["objective"]
+            )
+            row["runtime_delta_vs_best_manual_seconds"] = _delta(
+                row["runtime_seconds"], best_manual["runtime_seconds"]
+            )
+        return row
+    finally:
+        c.end()
+        if log_f is not None:
+            log_f.close()
 
 
 # Sensibilidad de capacidad (equivalente a Model.fixed() de Gurobi)
 
 
-def sensitivity_capacity(model, solution, variables, instance, ctx):
+def sensitivity_capacity(model, solution, variables, instance, ctx, log_path=None):
     """Fija X y Z al incumbente, resuelve el LP y extrae Pi, holgura y rangos RHS."""
     if solution is None:
         return [
@@ -235,58 +262,71 @@ def sensitivity_capacity(model, solution, variables, instance, ctx):
         ]
 
     c = cplex.Cplex(_export_lp(model))
-    for stream in (c.set_log_stream, c.set_results_stream, c.set_warning_stream):
-        stream(None)
-    c.parameters.threads.set(THREADS)
-    c.parameters.timelimit.set(TIME_LIMIT)
+    log_f = None
+    if log_path is not None:
+        log_path = Path(log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_f = open(log_path, "w", encoding="utf-8")
+        for stream in (c.set_log_stream, c.set_results_stream, c.set_warning_stream):
+            stream(log_f)
+    else:
+        for stream in (c.set_log_stream, c.set_results_stream, c.set_warning_stream):
+            stream(None)
 
-    for dvar in list(variables["X"].values()) + list(variables["Z"].values()):
-        v = float(round(solution.get_value(dvar)))
-        c.variables.set_lower_bounds(dvar.name, v)
-        c.variables.set_upper_bounds(dvar.name, v)
+    try:
+        c.parameters.threads.set(THREADS)
+        c.parameters.timelimit.set(TIME_LIMIT)
 
-    c.set_problem_type(c.problem_type.LP)
-    c.parameters.preprocessing.presolve.set(0)  # base limpia para sensibilidad
-    c.solve()
+        for dvar in list(variables["X"].values()) + list(variables["Z"].values()):
+            v = float(round(solution.get_value(dvar)))
+            c.variables.set_lower_bounds(dvar.name, v)
+            c.variables.set_upper_bounds(dvar.name, v)
 
-    if c.solution.get_status() not in (1,):  # 1 = CPX_STAT_OPTIMAL
-        row = {
-            **_base_row(instance, "sensitivity_capacity", ctx),
-            "status": c.solution.get_status_string(),
-        }
+        c.set_problem_type(c.problem_type.LP)
+        c.parameters.preprocessing.presolve.set(0)  # base limpia para sensibilidad
+        c.solve()
+
+        if c.solution.get_status() not in (1,):  # 1 = CPX_STAT_OPTIMAL
+            return [
+                {
+                    **_base_row(instance, "sensitivity_capacity", ctx),
+                    "status": c.solution.get_status_string(),
+                }
+            ]
+
+        names = [
+            f"Capacidad_{r}_{t}" for r in instance["vehicles"] for t in instance["days"]
+        ]
+        pairs = [(r, t) for r in instance["vehicles"] for t in instance["days"]]
+        rhs = c.linear_constraints.get_rhs(names)
+        slack = c.solution.get_linear_slacks(names)
+        pi = c.solution.get_dual_values(names)
+        ranges = c.solution.sensitivity.rhs(names)
+        lp_obj = c.solution.get_objective_value()
+
+        records = []
+        for k, (r, t) in enumerate(pairs):
+            records.append(
+                {
+                    **_base_row(instance, "sensitivity_capacity", ctx),
+                    "status": "OPTIMAL_LP_FIXED",
+                    "route": r,
+                    "day": t,
+                    "capacity_rhs": rhs[k],
+                    "slack": slack[k],
+                    "shadow_price_pi": pi[k],
+                    "SARHSLow": ranges[k][0],
+                    "SARHSUp": ranges[k][1],
+                    "fixed_lp_objective": lp_obj,
+                    "threads": THREADS,
+                    "time_limit_seconds": TIME_LIMIT,
+                }
+            )
+        return records
+    finally:
         c.end()
-        return [row]
-
-    names = [
-        f"Capacidad_{r}_{t}" for r in instance["vehicles"] for t in instance["days"]
-    ]
-    pairs = [(r, t) for r in instance["vehicles"] for t in instance["days"]]
-    rhs = c.linear_constraints.get_rhs(names)
-    slack = c.solution.get_linear_slacks(names)
-    pi = c.solution.get_dual_values(names)
-    ranges = c.solution.sensitivity.rhs(names)
-    lp_obj = c.solution.get_objective_value()
-
-    records = []
-    for k, (r, t) in enumerate(pairs):
-        records.append(
-            {
-                **_base_row(instance, "sensitivity_capacity", ctx),
-                "status": "OPTIMAL_LP_FIXED",
-                "route": r,
-                "day": t,
-                "capacity_rhs": rhs[k],
-                "slack": slack[k],
-                "shadow_price_pi": pi[k],
-                "SARHSLow": ranges[k][0],
-                "SARHSUp": ranges[k][1],
-                "fixed_lp_objective": lp_obj,
-                "threads": THREADS,
-                "time_limit_seconds": TIME_LIMIT,
-            }
-        )
-    c.end()
-    return records
+        if log_f is not None:
+            log_f.close()
 
 
 # Brecha de integralidad
@@ -314,7 +354,15 @@ def calculate_gap(results):
 # Suite completa para una instancia y una semilla
 
 
-def run_experiments(instance, ctx, allow_large=False, skip_tuning=False):
+def _log_file(log_dir, instance, experiment, ctx):
+    if log_dir is None:
+        return None
+    return Path(log_dir) / f"{instance['name']}_rep{ctx['replicate']}_{experiment}.log"
+
+
+def run_experiments(
+    instance, ctx, allow_large=False, skip_tuning=False, log_dir=None
+):
     sizing, _ = build_model(instance, {"OutputFlag": 0}, relax=False)
     n_vars, n_cons = sizing.number_of_variables, sizing.number_of_constraints
     sizing.end()
@@ -340,7 +388,13 @@ def run_experiments(instance, ctx, allow_large=False, skip_tuning=False):
             instance, {**params, "OutputFlag": 0}, relax=False
         )
         _prepare(model, ctx["seed"])
-        row, sol = _solve_and_measure(model, instance, name, ctx)
+        row, sol = _solve_and_measure(
+            model,
+            instance,
+            name,
+            ctx,
+            log_path=_log_file(log_dir, instance, name, ctx),
+        )
         results.append(row)
         if name == "base":
             base_model, base_sol, base_vars = model, sol, variables
@@ -357,15 +411,40 @@ def run_experiments(instance, ctx, allow_large=False, skip_tuning=False):
 
     lp_model, _ = build_model(instance, {"OutputFlag": 0}, relax=True)
     _prepare(lp_model, ctx["seed"])
-    lp_row, _ = _solve_and_measure(lp_model, instance, "relajado", ctx, relax=True)
+    lp_row, _ = _solve_and_measure(
+        lp_model,
+        instance,
+        "relajado",
+        ctx,
+        relax=True,
+        log_path=_log_file(log_dir, instance, "relajado", ctx),
+    )
     results.append(lp_row)
     lp_model.end()
     calculate_gap(results)
 
     if not skip_tuning:
-        results.append(_run_tuning(base_model, instance, ctx, baseline, best_manual))
+        results.append(
+            _run_tuning(
+                base_model,
+                instance,
+                ctx,
+                baseline,
+                best_manual,
+                log_path=_log_file(log_dir, instance, "tuned", ctx),
+            )
+        )
 
-    results.extend(sensitivity_capacity(base_model, base_sol, base_vars, instance, ctx))
+    results.extend(
+        sensitivity_capacity(
+            base_model,
+            base_sol,
+            base_vars,
+            instance,
+            ctx,
+            log_path=_log_file(log_dir, instance, "sensitivity_capacity", ctx),
+        )
+    )
     base_model.end()
     return results
 
@@ -414,6 +493,11 @@ def main():
         action="store_true",
         help="No agregar a los CSV acumulados *_all.csv.",
     )
+    p.add_argument(
+        "--overwrite-master",
+        action="store_true",
+        help="Sobrescribir los CSV acumulados *_all.csv.",
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args()
 
@@ -426,11 +510,16 @@ def main():
         f"_{args.tag}" if args.tag else ""
     )
     run_dir = Path(args.results_dir) / SOLVER / run_id
+    log_dir = run_dir / "logs"
     run_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
     results_file = run_dir / f"{SOLVER}_results_{run_id}.csv"
     sens_file = run_dir / f"{SOLVER}_sensitivity_{run_id}.csv"
     master_results = Path(args.results_dir) / f"{SOLVER}_results_all.csv"
     master_sens = Path(args.results_dir) / f"{SOLVER}_sensitivity_all.csv"
+    if args.overwrite_master and not args.no_master:
+        master_results.unlink(missing_ok=True)
+        master_sens.unlink(missing_ok=True)
 
     seeds = [args.seed_base + i for i in range(args.repeats)]
     metadata = {
@@ -447,6 +536,7 @@ def main():
         "tune_time_limit_seconds": TUNE_TIME_LIMIT,
         "configurations": CONFIGURATIONS,
         "skip_tuning": args.skip_tuning,
+        "log_dir": str(log_dir),
         "args": vars(args),
     }
     (run_dir / f"{SOLVER}_run_{run_id}.json").write_text(
@@ -464,6 +554,7 @@ def main():
                 ctx,
                 allow_large=args.allow_large,
                 skip_tuning=args.skip_tuning,
+                log_dir=log_dir,
             )
             sens = [r for r in rows if r.get("experiment") == "sensitivity_capacity"]
             main_rows = [
@@ -482,11 +573,19 @@ def main():
                     print(
                         f"  {r.get('experiment')}: status={r.get('status')}, "
                         f"obj={r.get('objective')}, gap%={r.get('gap_pct')}, "
-                        f"t={r.get('runtime_seconds')}"
+                        f"nodes={r.get('nodes')}, t={r.get('runtime_seconds')}"
                     )
+
+    latest_logs_dir = Path(args.results_dir) / "logs" / SOLVER
+    latest_logs_dir.mkdir(parents=True, exist_ok=True)
+    for old_log in latest_logs_dir.glob("*.log"):
+        old_log.unlink()
+    for log_file in log_dir.glob("*.log"):
+        shutil.copy2(log_file, latest_logs_dir / log_file.name)
 
     print(f"\nResultados:    {results_file.resolve()}")
     print(f"Sensibilidad:  {sens_file.resolve()}")
+    print(f"Logs:          {latest_logs_dir.resolve()}")
     print(f"Metadatos:     {(run_dir / f'{SOLVER}_run_{run_id}.json').resolve()}")
 
 

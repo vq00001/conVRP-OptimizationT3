@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from instance_loader import load_instance
-from model import build_model
+from gurobi_model import build_model
 from solver import run_model
 
 

@@ -1,0 +1,51 @@
+Version identifier: 22.2.0.0 | 2026-05-04 | 5dff98e58
+CPXPARAM_Preprocessing_Presolve                  0
+CPXPARAM_Read_DataCheck                          1
+CPXPARAM_Threads                                 1
+CPXPARAM_RandomSeed                              0
+CPXPARAM_TimeLimit                               600
+Clique table members: 267.
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: none, using 1 thread.
+Root relaxation solution time = 0.01 sec. (6.43 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+      0     0      577.6400   170                    577.6400      321         
+      0     0      577.6400   126                 Impl Bds: 2      323         
+      0     0      577.6400   123                    Cuts: 75      347         
+      0     0      577.6400   150                    Cuts: 91      397         
+      0     0      578.0191   153                     Cuts: 7      418         
+      0     0      578.0191   181                    Cuts: 29      435         
+*     0+    0                          953.1000      578.0191            39.35%
+*     0+    0                          952.1400      578.0191            39.29%
+      0     0  -1.00000e+75     0      952.1400      578.0191      435   39.29%
+Detecting symmetries...
+      0     2      580.4791   120      952.1400      580.4791      492   39.03%
+Elapsed time = 0.23 sec. (363.27 ticks, tree = 0.01 MB, solutions = 2)
+     10    10      771.9780    80      952.1400      604.0175      792   36.56%
+     49    24      688.4169   101      952.1400      659.1983     1864   30.77%
+*    70+   37                          906.4300      668.7419            26.22%
+*    70+   37                          900.4800      668.7419            25.73%
+    110    58      804.2108   111      900.4800      681.5174     3775   24.32%
+    205    85      869.0850    46      900.4800      731.0910     6386   18.81%
+*   249   100      integral     0      897.6800      734.5108     7243   18.18%
+    359   128      889.4949    98      897.6800      756.2137    10039   15.76%
+    534   152        cutoff            897.6800      789.7931    13155   12.02%
+*   647   140      integral     0      895.3800      807.9298    15831    9.77%
+*   648   139      integral     0      893.6600      807.9298    15833    9.59%
+    736    62        cutoff            893.6600      838.4923    19001    6.17%
+
+Implied bound cuts applied:  162
+Flow cuts applied:  1
+Mixed integer rounding cuts applied:  5
+Gomory fractional cuts applied:  2
+
+Root node processing (before b&c):
+  Real time             =    0.23 sec. (363.30 ticks)
+Sequential b&c:
+  Real time             =    1.03 sec. (1968.07 ticks)
+                          ------------
+Total (root+branch&cut) =    1.26 sec. (2331.37 ticks)

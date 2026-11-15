@@ -1,93 +1,85 @@
-# Veredicto comparativo: CPLEX vs. Gurobi (conVRP)
+# Veredicto comparativo: CPLEX vs. Gurobi (conVRP — mismo computador)
 
-Análisis de la corrida experimental de **CPLEX 22.2.0.0** (`run_id`: `20261115_140551`, `seed = 0`) frente a las corridas registradas de **Gurobi** (`results/results.csv` y `results/results_2.csv`) sobre las dos instancias calibradas de 15 clientes (`1515` variables y `1755` restricciones).
+Análisis comparativo ejecutado en igualdad de condiciones (**mismo computador `DESKTOP-07TOJM3`**, CPU `12th Gen Intel(R) Core(TM) i5-12450HX`, Python `3.12.13`, `Threads = 1`, `TimeLimit = 600 s`) entre **Gurobi 14.0.0** y **CPLEX 22.2.0.0** (`run_id = 20261115_151830`, `seed = 0`) sobre las dos instancias calibradas de 15 clientes (`1515` variables y `1755` restricciones antes del presolve).
 
-> **Archivos fuente**
-> - CPLEX resultados: `results/cplex/20261115_140551/cplex_results_20261115_140551.csv`
-> - CPLEX sensibilidad: `results/cplex/20261115_140551/cplex_sensitivity_20261115_140551.csv`
-> - CPLEX metadatos: `results/cplex/20261115_140551/cplex_run_20261115_140551.json`
-> - Gurobi resultados: `results/results.csv` (idéntico a `results/results_1.csv`) y `results/results_2.csv`
+> **Archivos fuente (mismo computador)**
+> - **Gurobi**: `results/results.csv`, `results/sensitivity.csv` y 18 logs nativos en `results/logs/gurobi/`
+> - **CPLEX**: `results/cplex_results_all.csv`, `results/cplex_sensitivity_all.csv`, `results/cplex/20261115_151830/cplex_run_20261115_151830.json` y 18 logs nativos en `results/logs/cplex/`
+> - **Gráficos**: `results/graficos_instancias/` y `results/graficos_comparacion/`
 
 ---
 
 ## 1. Veredicto general
 
-Los resultados son **plenamente válidos y consistentes** entre ambos solvers:
+Los resultados confirman **equivalencia matemática exacta** entre ambos solvers y muestran diferencias claras de estrategia algorítmica en el árbol de Branch & Cut:
 
-1. **Equivalencia matemática verificada**: CPLEX y Gurobi alcanzan exactamente los mismos óptimos enteros (`511.19` en C101 y `893.66` en RC101), las mismas cotas de relajación lineal (`129.87` y `156.66`), las mismas brechas de integralidad (`74.59 %` y `82.47 %`) y el mismo patrón de holguras, precios sombra (`0.0`) y rangos RHS en sensibilidad de capacidad (salvo permutación simétrica de vehículos 2 y 3 en RC101).
-2. **Desempeño por instancia**:
-   - En **`instance_1_c101_15c`**, Gurobi fue considerablemente más rápido en `base` (`7.67 s` / `10.49 s` vs. `76.64 s` en CPLEX). Sin embargo, el **tuning de CPLEX** y **`mipfocus_1`** recortaron el tiempo de CPLEX a **`19.79 s`** y **`22.56 s`**, respectivamente (~3.4x–3.9x más rápido que el `base` de CPLEX).
-   - En **`instance_2_rc101_15c`**, ambos solvers resolvieron en menos de un segundo en `base`, con CPLEX ligeramente más rápido (`0.42 s` vs. `0.57 s` / `0.59 s` en Gurobi) y un tuning casi instantáneo (`2.45 s`).
-
-*(Nota: la corrida de CPLEX corresponde a 1 réplica con `seed=0`, mientras que `results.csv` y `results_2.csv` provienen de ejecuciones previas de Gurobi registradas en el repositorio, por lo que las diferencias finas de tiempo también reflejan condiciones de ejecución independientes).*
-
----
-
-## 2. Validación del modelo y relajación continua
-
-| Instancia | Métrica | CPLEX | Gurobi |
-|---|---|---:|---:|
-| `instance_1_c101_15c` | Óptimo MILP (`base`) | `511.19` | `511.19` |
-| `instance_1_c101_15c` | Relajación LP (`relajado`) | `129.87` | `129.87` |
-| `instance_1_c101_15c` | Brecha de integralidad (`%`) | `74.59 %` | `74.59 %` |
-| `instance_2_rc101_15c` | Óptimo MILP (`base`) | `893.66` | `893.66` |
-| `instance_2_rc101_15c` | Relajación LP (`relajado`) | `156.66` | `156.66` |
-| `instance_2_rc101_15c` | Brecha de integralidad (`%`) | `82.47 %` | `82.47 %` |
-
-La **brecha de integralidad alta** (`74.59 %` y `82.47 %`) es característica de formulaciones de ruteo con ventanas de tiempo basadas en restricciones **Big-M**, donde la relajación continua debilita fuertemente el acoplamiento temporal.
+1. **Equivalencia matemática verificada**: Gurobi y CPLEX obtienen exactamente los mismos óptimos enteros (`511.19` en C101 y `893.66` en RC101), los mismos óptimos de relajación continua (`129.87` vía `model.relax()` y CPLEX fijando binarias a continuas; `156.66` en RC101), las mismas brechas de integralidad (`74.59 %` y `82.47 %`) y el mismo comportamiento dual en sensibilidad de capacidad (`Pi = 0.0`).
+2. **Desempeño en `instance_1_c101_15c` (ventanas de tiempo más estrechas y acoplamiento fuerte)**:
+   - En configuración por defecto (`base`), **Gurobi fue ~12.5x más rápido** (`6.23 s`, `3,371` nodos, gap `0.0000 %`) que **CPLEX** (`77.57 s`, `32,292` nodos, gap `0.0078 %` dentro de tolerancia `1e-4`).
+   - Los **logs nativos revelan la causa**: ambos parten con exactamente la misma relajación raíz antes de cortes (`218.92`), pero Gurobi eleva la cota dual del nodo raíz mediante planos de corte hasta **`311.16`** (`gap = 50.0 %`) y encuentra el óptimo `511.19` en el nodo `394`, mientras que CPLEX solo alcanza **`239.47`** al salir de la raíz (`gap = 61.74 %`) y requiere un *restart* más `17,227` nodos para hallar `511.19`.
+   - El **tuning automático** de CPLEX (`cutpasses=1`, `probe=-1`, `variableselect=4`) redujo sus nodos a menos de la mitad (`15,809`) y su tiempo a **`19.97 s`** (`3.88x` más rápido que su `base`), mientras `mipfocus_1` bajó a **`22.76 s`**.
+3. **Desempeño en `instance_2_rc101_15c`**:
+   - Ambos resuelven en menos de un segundo en `base`, con **CPLEX ligeramente más rápido** (`0.43 s`, `741` nodos) frente a **Gurobi** (`0.83 s`, `452` nodos), y `mipfocus_1` en CPLEX en apenas **`0.30 s`**.
 
 ---
 
-## 3. Comparación por configuración (`Threads=1`, `TimeLimit=600 s`)
+## 2. Validación del modelo y relajación continua (LP vs. MILP)
 
-### 3.1 `instance_1_c101_15c`
+| Instancia | Métrica | Gurobi 14.0.0 | CPLEX 22.2.0.0 | Diferencia |
+|---|---|---:|---:|---:|
+| `instance_1_c101_15c` | Relajación LP (`relajado`) | `129.87` (`0.011 s`, `0` nodos) | `129.87` (`0.005 s`, `0` nodos) | `0.00` |
+| `instance_1_c101_15c` | Óptimo MILP (`base`) | `511.19` (`6.23 s`, `3,371` nodos) | `511.19` (`77.57 s`, `32,292` nodos) | `0.00` |
+| `instance_1_c101_15c` | Brecha de integralidad (`%`) | `74.59 %` | `74.59 %` | `0.00 %` |
+| `instance_2_rc101_15c` | Relajación LP (`relajado`) | `156.66` (`0.009 s`, `0` nodos) | `156.66` (`0.004 s`, `0` nodos) | `0.00` |
+| `instance_2_rc101_15c` | Óptimo MILP (`base`) | `893.66` (`0.83 s`, `452` nodos) | `893.66` (`0.43 s`, `741` nodos) | `0.00` |
+| `instance_2_rc101_15c` | Brecha de integralidad (`%`) | `82.47 %` | `82.47 %` | `0.00 %` |
 
-| Experimento | CPLEX Tiempo (s) | CPLEX Gap (%) | CPLEX Nodos | CPLEX Estado | Gurobi Tiempo `results.csv` / `results_2.csv` (s) |
-|---|---:|---:|---:|---|---:|
-| `base` | `76.64` | `0.0078` | `32,292` | `integer optimal, tolerance` | `7.67` / `10.49` |
-| `cuts_0` | `71.10` | `0.0079` | `76,370` | `integer optimal, tolerance` | `38.55` / `53.23` |
-| `presolve_0` | `88.37` | `0.0094` | `65,672` | `integer optimal, tolerance` | `38.97` / `56.58` |
-| `mipfocus_1` | `22.56` | `0.0074` | `20,518` | `integer optimal, tolerance` | `10.20` / `13.90` |
-| `mipfocus_3` | `169.75` | `0.0099` | `44,372` | `integer optimal, tolerance` | `21.18` / `30.16` |
-| `heuristics_0` | `36.74` | `0.0000` | `20,968` | `integer optimal solution` | `6.67` / `6.68` |
-| `relajado` | `0.0041` | `0.0000` | `0` | `optimal` | `0.0077` / `0.0081` |
-| `tuned` | `19.79` | `0.0061` | `15,809` | `integer optimal, tolerance` | `7.64` / `8.81` |
+La **brecha de integralidad alta** (`74.59 %` en C101 y `82.47 %` en RC101) es estructural a la formulación con restricciones **Big-M** de precedencia temporal: al relajar las variables binarias $X_{ij}^{rd}$ a continuas $[0,1]$, los tiempos de llegada dejan de acoplar efectivamente los arcos y la relajación LP se acerca a una cota de flujo mínimo muy laxa, obligando a los planos de corte y al *branch-and-bound* a cerrar el resto de la brecha.
 
-- **Tuning C101**: CPLEX tardó `185.33 s` de pared (`tune_time_limit_seconds = 120.0`), pero la configuración afinada (`parameters.mip.limits.cutpasses=1`, `parameters.mip.strategy.probe=-1`, `parameters.mip.strategy.variableselect=4`) redujo el tiempo de resolución en **`-56.84 s`** respecto a `base` (`76.64 s -> 19.79 s`) y superó a la mejor configuración manual (`mipfocus_1`: `22.56 s`) por `2.77 s`. En Gurobi, el tuning demoró `99.86 s` / `98.75 s` y dio un tiempo casi igual al `base` (`7.64 s` vs. `7.67 s` en `results.csv`, y `8.81 s` vs. `10.49 s` en `results_2.csv`).
-- **Estrategia MIP**: En CPLEX, **`mipfocus_1`** (énfasis en factibilidad) aceleró más de 3 veces respecto a `base`, mientras que **`mipfocus_3`** (énfasis en cota dual) más que duplicó el tiempo (`169.75 s`). Esto es consistente con la relajación LP débil (`74.59 %` de brecha), donde priorizar soluciones enteras y ramificación rinde más que intentar cerrar la cota dual por cortes/procesamiento pesado.
-- **Presolve y cortes**: Desactivar presolve (`presolve_0`) empeoró en ambos solvers (`88.37 s` en CPLEX; `38.97 s` / `56.58 s` en Gurobi). Desactivar cortes (`cuts_0`) penalizó fuertemente a Gurobi (`38.55 s` / `53.23 s`), mientras que en CPLEX mantuvo un tiempo similar (`71.10 s`) a costa de más del doble de nodos (`76,370` vs. `32,292`).
+---
 
-### 3.2 `instance_2_rc101_15c`
+## 3. Comparación por configuración (`Threads = 1`, `TimeLimit = 600 s`)
 
-| Experimento | CPLEX Tiempo (s) | CPLEX Gap (%) | CPLEX Nodos | CPLEX Estado | Gurobi Tiempo `results.csv` / `results_2.csv` (s) |
-|---|---:|---:|---:|---|---:|
-| `base` | `0.42` | `0.0000` | `741` | `integer optimal solution` | `0.57` / `0.59` |
-| `cuts_0` | `0.49` | `0.0000` | `1,176` | `integer optimal solution` | `0.61` / `0.68` |
-| `presolve_0` | `1.25` | `0.0000` | `801` | `integer optimal solution` | `1.81` / `2.11` |
-| `mipfocus_1` | `0.30` | `0.0000` | `577` | `integer optimal solution` | `1.58` / `1.82` |
-| `mipfocus_3` | `0.47` | `0.0000` | `287` | `integer optimal solution` | `3.65` / `4.20` |
-| `heuristics_0` | `0.48` | `0.0000` | `990` | `integer optimal solution` | `0.64` / `0.65` |
-| `relajado` | `0.0037` | `0.0000` | `0` | `optimal` | `0.0075` / `0.0093` |
-| `tuned` | `0.43` | `0.0000` | `972` | `integer optimal solution` | `0.56` / `0.61` |
+### 3.1 `instance_1_c101_15c` (Óptimo = `511.19`)
 
-- **Tuning RC101**: CPLEX completó el tuning en `2.45 s` (cambiando `parameters.mip.limits.cutpasses=-1`), con un tiempo posterior de `0.43 s` prácticamente igual a `base` (`0.42 s`). Gurobi consumió `120.00 s` / `119.39 s` de tuning y obtuvo `0.56 s` / `0.61 s`.
-- **Instancia sencilla**: En ambos solvers RC101 se resuelve de forma muy rápida; `presolve_0` es la variante más lenta en CPLEX (`1.25 s`), y en Gurobi `mipfocus_3` es la más lenta (`3.65 s` / `4.20 s`, con `gap = 0.0044 %`).
+| Experimento | Gurobi Tiempo (s) | Gurobi Nodos | Gurobi Gap (%) | CPLEX Tiempo (s) | CPLEX Nodos | CPLEX Gap (%) |
+|---|---:|---:|---:|---:|---:|---:|
+| `base` | `6.23` | `3,371` | `0.0000` | `77.57` | `32,292` | `0.0078` |
+| `cuts_0` | `34.82` | `74,381` | `0.0078` | `72.33` | `76,370` | `0.0079` |
+| `presolve_0` | `50.86` | `22,107` | `0.0059` | `89.09` | `65,672` | `0.0094` |
+| `mipfocus_1` | `36.56` | `12,588` | `0.0000` | `22.76` | `20,518` | `0.0074` |
+| `mipfocus_3` | `26.38` | `1,237` | `0.0000` | `172.93` | `44,372` | `0.0099` |
+| `heuristics_0` | `6.83` | `3,862` | `0.0000` | `37.03` | `20,968` | `0.0000` |
+| `relajado` | `0.011` | `0` | `0.0000` | `0.005` | `0` | `0.0000` |
+| `tuned` | `6.25` | `3,371` | `0.0000` | `19.97` | `15,809` | `0.0061` |
+
+- **Dependencia de cortes en Gurobi vs. CPLEX**: En Gurobi, desactivar cortes (`cuts_0`) dispara los nodos de `3,371` a `74,381` (~22x) y el tiempo a `34.82 s`, confirmando que los planos de corte en la raíz (`Clique`, `Cover`, `Implied bound`, `Zero half`) son el motor principal de su ventaja en C101. En CPLEX, `cuts_0` duplica los nodos (`76,370`) con un tiempo similar (`72.33 s`).
+- **Presolve**: Desactivar `presolve` (`presolve_0`) degrada fuertemente a ambos (`50.86 s` en Gurobi, `89.09 s` en CPLEX).
+- **Énfasis MIP (`MIPFocus`)**: En Gurobi, su estrategia por defecto balanceada (`base`) supera ampliamente a `mipfocus_1` (`36.56 s`) y `mipfocus_3` (`26.38 s`, aunque este último logra la menor cantidad de nodos con `1,237`). En CPLEX ocurre lo opuesto: priorizar factibilidad (`mipfocus_1`) recorta el tiempo a `22.76 s`, mientras `mipfocus_3` lo más que duplica (`172.93 s`).
+- **Tuning automático (`tune_time_limit = 120 s`)**: Gurobi consumió `106.84 s` de pared y mantuvo el excelente `base` (`6.25 s`, `3,371` nodos). CPLEX empleó `182.52 s` de pared y encontró `{cutpasses: 1, probe: -1, variableselect: 4}`, acelerando de `77.57 s` a `19.97 s` (`3.88x`) con menos de la mitad de nodos (`15,809`).
+
+### 3.2 `instance_2_rc101_15c` (Óptimo = `893.66`)
+
+| Experimento | Gurobi Tiempo (s) | Gurobi Nodos | Gurobi Gap (%) | CPLEX Tiempo (s) | CPLEX Nodos | CPLEX Gap (%) |
+|---|---:|---:|---:|---:|---:|---:|
+| `base` | `0.83` | `452` | `0.0000` | `0.43` | `741` | `0.0000` |
+| `cuts_0` | `0.39` | `473` | `0.0000` | `0.49` | `1,176` | `0.0000` |
+| `presolve_0` | `1.53` | `1,224` | `0.0000` | `1.26` | `801` | `0.0000` |
+| `mipfocus_1` | `1.26` | `401` | `0.0000` | `0.30` | `577` | `0.0000` |
+| `mipfocus_3` | `6.00` | `195` | `0.0000` | `0.48` | `287` | `0.0000` |
+| `heuristics_0` | `0.57` | `418` | `0.0000` | `0.49` | `990` | `0.0000` |
+| `relajado` | `0.009` | `0` | `0.0000` | `0.004` | `0` | `0.0000` |
+| `tuned` | `0.85` | `452` | `0.0000` | `0.43` | `972` | `0.0000` |
+
+En RC101 las ventanas de tiempo más holgadas/heterogéneas reducen el tamaño efectivo del árbol a pocos cientos de nodos: CPLEX termina en `0.30 s–1.26 s` (`2.45 s` de tuning), mientras Gurobi resuelve `base` en `0.83 s` y penaliza `mipfocus_3` (`6.00 s` por sobrecosto de cortes frente a un árbol de apenas `195` nodos; tuning `119.78 s`).
 
 ---
 
 ## 4. Análisis de sensibilidad de capacidad (`sensitivity_capacity`)
 
-Todas las combinaciones `(ruta, día)` (9 por instancia) terminaron en estado `OPTIMAL_LP_FIXED` con `fixed_lp_objective` igual al óptimo entero (`511.19` en C101 y `893.66` en RC101) y **`shadow_price_pi = 0.0`** en ambos solvers:
+Las 9 restricciones de capacidad `(ruta, día)` por instancia cerraron en `OPTIMAL_LP_FIXED` con `fixed_lp_objective` idéntico al óptimo entero (`511.19` y `893.66`) y **`shadow_price_pi = 0.0`** en ambos solvers:
 
-- **C101 (`Q = 85.0`)**: coincidencia exacta par por par entre ambos solvers: 8 pares con holgura positiva (`5.0` a `35.0`) y 1 par saturado (`route=2, day=2`, `slack = 0.0`, `SARHSLow = 85.0`, `SARHSUp = 1e+20` / `inf`).
-- **RC101 (`Q = 90.0`)**: ambos solvers tienen 7 pares con holgura positiva (`5.0` a `30.0`) y 2 pares saturados (`slack = 0.0`, `SARHSLow = 90.0`, `SARHSUp = 1e+20` / `inf`): `route=1, day=2` en ambos, y el segundo corresponde a `route=3, day=1` en CPLEX vs. `route=2, day=1` en Gurobi (permutación simétrica de las rutas homogéneas 2 y 3 con idéntico conjunto de holguras).
+- **C101 (`Q = 85.0`)**: Ambos encuentran exactamente 1 par saturado (`slack = 0.0`, `SARHSLow = 85.0`, `SARHSUp = inf / 1e+20`) y el mismo multiconjunto de holguras diarias (`5.0` a `35.0`); Gurobi satura `(ruta=3, día=2)` y CPLEX satura `(ruta=2, día=2)` debido a la simetría entre vehículos homogéneos 2 y 3.
+- **RC101 (`Q = 90.0`)**: Coincidencia exacta par por par en ambos solvers, con 2 pares saturados (`(ruta=1, día=2)` y `(ruta=3, día=1)`, `slack = 0.0`, `SARHSLow = 90.0`) y 7 pares con holgura positiva (`5.0` a `30.0`).
 
-**Interpretación**: Que `Pi = 0.0` incluso en las restricciones activas (`slack = 0.0`) se debe a que el análisis se realiza sobre el **LP con `X` y `Z` fijados** al incumbente óptimo. Una vez fija la asignación de clientes a rutas, la carga diaria es constante y la distancia total no cambia marginalmente al aumentar o disminuir localmente `Q` mientras no se viole la carga ya asignada (`SARHSLow`). Esto no implica que la capacidad no restrinja el problema MILP original si `Q` disminuyera por debajo de `SARHSLow` y obligara a reasignar clientes.
-
----
-
-## 5. Observaciones metodológicas para el informe
-
-1. **Tolerancia MIP en C101**: En CPLEX, salvo `heuristics_0` (`0.0 %`), las corridas de C101 finalizaron con estado `integer optimal, tolerance` y `gap_pct` entre `0.0061 %` y `0.0099 %` (dentro de la tolerancia relativa por defecto de `0.01 %`), mientras que Gurobi cerró en `0.0 %`. El valor objetivo encontrado (`511.19`) coincide exactamente con el óptimo global en ambos casos.
-2. **Representatividad estadística**: Los datos de CPLEX corresponden a una réplica (`seed = 0`). Para reportar medias y desviaciones estándar entre semillas en la T3, se puede ejecutar con múltiples réplicas (por ejemplo `--repeats 5 --seed-base 0 --tag final --allow-large`).
-3. **Tiempo de pared del tuning en C101**: Aunque `tune_time_limit_seconds` está configurado en `120.0 s`, el tiempo total de pared registrado en `tuning_wall_seconds` fue `185.33 s`, detalle relevante al contabilizar el costo computacional total del ajuste automático.
+**Interpretación**: En el LP obtenido al fijar todas las variables binarias $(X, Z)$ al incumbente óptimo, la asignación de clientes a rutas queda constante, por lo que $Q$ no modifica marginalmente la distancia recorrida mientras se mantenga sobre la carga asignada (`SARHSLow`). Esto no significa que $Q$ sea irrelevante en el MILP original: bajar $Q$ por debajo de `SARHSLow` volvería infactible la asignación actual y forzaría nuevas rutas más costosas.

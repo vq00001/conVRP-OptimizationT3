@@ -2,7 +2,6 @@ import gurobipy as gp
 from gurobipy import GRB
 from pathlib import Path
 import time
-from solver import solve_cplex_model
 
 
 def print_status(status):
@@ -71,6 +70,7 @@ def run_model(instance, build_model, params=None, relax=False):
         if has_solution and model.IsMIP
         else (0.0 if has_solution and model.Status == GRB.OPTIMAL else None)
     )
+    nodes = int(round(model.NodeCount)) if model.IsMIP else 0
 
     result = {
         "instance": instance["name"],
@@ -80,8 +80,13 @@ def run_model(instance, build_model, params=None, relax=False):
         "best_bound": model.ObjBound,
         "gap_pct": gap,
         "runtime_seconds": model.Runtime,
+        "nodes": nodes,
         "solutions_found": model.SolCount,
+        "threads": model.Params.Threads,
+        "time_limit_seconds": model.Params.TimeLimit,
     }
+    if model.Params.LogFile:
+        model.Params.LogFile = ""
 
     return result, model, variables
 

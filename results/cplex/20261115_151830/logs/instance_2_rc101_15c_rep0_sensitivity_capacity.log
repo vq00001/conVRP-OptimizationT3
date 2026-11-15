@@ -1,0 +1,9 @@
+Version identifier: 22.2.0.0 | 2026-05-04 | 5dff98e58
+CPXPARAM_Preprocessing_Presolve                  0
+CPXPARAM_Read_DataCheck                          1
+CPXPARAM_Threads                                 1
+CPXPARAM_TimeLimit                               600
+
+Iteration log . . .
+Iteration:     1   Dual objective     =           893.660000
+Iteration:    62   Dual objective     =           893.660000

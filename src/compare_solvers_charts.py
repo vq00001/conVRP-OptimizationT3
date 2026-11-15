@@ -75,8 +75,10 @@ def _save_fig(fig, path):
     return path
 
 
-def chart_runtime_by_config(gurobi, cplex, output_dir):
-    """Barras agrupadas de tiempo de resolución (s) por configuración y solver."""
+def _plot_grouped_by_config(
+    gurobi, cplex, metric, ylabel, title, footer, fmt, output_path, integer=False
+):
+    """Dibuja barras agrupadas Gurobi vs. CPLEX por configuración en C101 y RC101."""
     fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.8))
     keys = [k for k, _ in CONFIG_LABELS]
     labels = [lbl for _, lbl in CONFIG_LABELS]
@@ -84,8 +86,8 @@ def chart_runtime_by_config(gurobi, cplex, output_dir):
     width = 0.38
 
     for ax, (inst, inst_title) in zip(axes, INSTANCES):
-        g_vals = [float(gurobi[inst, k]["runtime_seconds"]) for k in keys]
-        c_vals = [float(cplex[inst, k]["runtime_seconds"]) for k in keys]
+        g_vals = [float(gurobi[inst, k][metric]) for k in keys]
+        c_vals = [float(cplex[inst, k][metric]) for k in keys]
 
         b1 = ax.bar(
             [i - width / 2 for i in x],
@@ -102,34 +104,67 @@ def chart_runtime_by_config(gurobi, cplex, output_dir):
             color=COLORS["CPLEX"],
         )
 
-        ax.bar_label(b1, fmt="%.2f", padding=3, fontsize=8.5, rotation=90)
-        ax.bar_label(b2, fmt="%.2f", padding=3, fontsize=8.5, rotation=90)
+        if integer:
+            ax.bar_label(
+                b1,
+                labels=[f"{int(round(v)):,}" for v in g_vals],
+                padding=3,
+                fontsize=8.2,
+                rotation=90,
+            )
+            ax.bar_label(
+                b2,
+                labels=[f"{int(round(v)):,}" for v in c_vals],
+                padding=3,
+                fontsize=8.2,
+                rotation=90,
+            )
+        else:
+            ax.bar_label(b1, fmt=fmt, padding=3, fontsize=8.5, rotation=90)
+            ax.bar_label(b2, fmt=fmt, padding=3, fontsize=8.5, rotation=90)
 
         max_val = max(g_vals + c_vals)
-        ax.set_ylim(0, max_val * 1.24)
+        ax.set_ylim(0, max_val * 1.28)
         ax.set_xticks(x, labels, rotation=32, ha="right")
-        ax.set_ylabel("Tiempo de resolución (s)")
+        ax.set_ylabel(ylabel)
         ax.set_title(inst_title)
         ax.grid(axis="y", alpha=0.25)
         ax.set_axisbelow(True)
         ax.legend(frameon=True)
 
-    fig.suptitle(
-        "Comparación de tiempo de resolución por configuración: Gurobi vs. CPLEX",
-        fontsize=14,
-        fontweight="bold",
-        y=1.02,
-    )
-    fig.text(
-        0.5,
-        -0.03,
-        "Threads=1, TimeLimit=600 s. En Tune se grafica solo la resolución posterior al ajuste (sin tuning_wall_seconds).",
-        ha="center",
-        fontsize=9.5,
-        color="#475569",
-    )
+    fig.suptitle(title, fontsize=14, fontweight="bold", y=1.02)
+    fig.text(0.5, -0.03, footer, ha="center", fontsize=9.5, color="#475569")
     fig.tight_layout()
-    return _save_fig(fig, output_dir / "comparacion_tiempos_configs.png")
+    return _save_fig(fig, output_path)
+
+
+def chart_runtime_by_config(gurobi, cplex, output_dir):
+    """Barras agrupadas de tiempo de resolución (s) por configuración y solver."""
+    return _plot_grouped_by_config(
+        gurobi,
+        cplex,
+        metric="runtime_seconds",
+        ylabel="Tiempo de resolución (s)",
+        title="Comparación de tiempo de resolución por configuración: Gurobi vs. CPLEX",
+        footer="Mismo computador, Threads=1, TimeLimit=600 s. En Tune se grafica solo la resolución posterior al ajuste.",
+        fmt="%.2f",
+        output_path=output_dir / "comparacion_tiempos_configs.png",
+    )
+
+
+def chart_nodes_by_config(gurobi, cplex, output_dir):
+    """Barras agrupadas de nodos explorados por configuración y solver."""
+    return _plot_grouped_by_config(
+        gurobi,
+        cplex,
+        metric="nodes",
+        ylabel="Nodos explorados (Branch & Bound)",
+        title="Comparación de nodos explorados por configuración: Gurobi vs. CPLEX",
+        footer="Mismo computador, Threads=1, TimeLimit=600 s. Menor cantidad de nodos refleja podas/cortes más efectivos.",
+        fmt="%.0f",
+        output_path=output_dir / "comparacion_nodos_explorados.png",
+        integer=True,
+    )
 
 
 def chart_relative_change_vs_baseline(gurobi, cplex, output_dir):
@@ -187,8 +222,8 @@ def chart_relative_change_vs_baseline(gurobi, cplex, output_dir):
                 )
 
         min_v, max_v = min(g_pct + c_pct), max(g_pct + c_pct)
-        pad_left = max(45, abs(min_v) * 0.38)
-        pad_right = max(65, max_v * 0.24)
+        pad_left = max(145, abs(min_v) * 1.15)
+        pad_right = max(95, max_v * 0.25)
         ax.set_xlim(min(0, min_v) - pad_left, max_v + pad_right)
         ax.set_yticks(y, labels)
         ax.invert_yaxis()
@@ -258,10 +293,13 @@ def chart_tuning_cost_vs_solve(gurobi, cplex, output_dir):
         fontweight="bold",
         y=1.02,
     )
+    c_b = float(cplex["instance_1_c101_15c", "base"]["runtime_seconds"])
+    c_t = float(cplex["instance_1_c101_15c", "tuned"]["runtime_seconds"])
+    ratio = c_b / c_t if c_t else 0.0
     fig.text(
         0.5,
         -0.03,
-        "tune_time_limit_seconds = 120 s por instancia. En C101 el tuning de CPLEX aceleró la resolución 3.87x (76.64 s -> 19.79 s).",
+        f"tune_time_limit_seconds = 120 s por instancia. En C101 el tuning de CPLEX pasó de {c_b:.2f} s a {c_t:.2f} s ({ratio:.2f}x).",
         ha="center",
         fontsize=9.5,
         color="#475569",
@@ -388,7 +426,7 @@ def chart_capacity_sensitivity(cplex_sens_csv, output_dir):
     fig.text(
         0.5,
         -0.03,
-        "En ambos solvers todos los pares tienen Pi=0.0. En RC101, Gurobi y CPLEX permutan simétricamente las rutas homogéneas 2 y 3.",
+        "En ambos solvers todos los pares tienen Pi=0.0 (LP con X y Z fijos); rutas homogéneas con idéntico multiconjunto diario de holguras.",
         ha="center",
         fontsize=9.5,
         color="#475569",
@@ -414,6 +452,7 @@ def main():
 
     generated = [
         chart_runtime_by_config(gurobi, cplex, output_dir),
+        chart_nodes_by_config(gurobi, cplex, output_dir),
         chart_relative_change_vs_baseline(gurobi, cplex, output_dir),
         chart_tuning_cost_vs_solve(gurobi, cplex, output_dir),
         chart_lp_milp_validation(gurobi, cplex, output_dir),
